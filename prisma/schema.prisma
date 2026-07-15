@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Signal {
+  id         String   @id @default(cuid())
+  pair       String
+  display    String
+  direction  String
+  bias       String
+  timeframe  String
+  confidence Float
+
+  entryPrice  Float
+  stopLoss    Float
+  takeProfit1 Float
+  takeProfit2 Float
+  takeProfit3 Float
+
+  riskPips        Float
+  rewardPips      Float
+  riskRewardRatio Float
+
+  biasReasoning Json
+  analysis      Json
+
+  status     String  @default("active")
+  resultPips Float?
+
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  closedAt  DateTime?
+
+  @@index([pair])
+  @@index([status])
+  @@index([createdAt])
+}
