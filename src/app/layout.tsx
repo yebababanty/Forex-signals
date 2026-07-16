@@ -20,10 +20,11 @@ export default function RootLayout({
             <Link href="/dashboard" className="text-lg font-bold text-emerald-400">
               📈 ForexSignals
             </Link>
-            <div className="flex gap-4 text-sm">
+            <div className="flex gap-3 text-sm">
               <Link href="/dashboard" className="text-slate-300 hover:text-white">Dashboard</Link>
               <Link href="/signals" className="text-slate-300 hover:text-white">Signals</Link>
               <Link href="/analysis/EURUSD" className="text-slate-300 hover:text-white">Analysis</Link>
+              <Link href="/scan" className="text-emerald-400 hover:text-emerald-300 font-semibold">🔄 Scan</Link>
             </div>
           </div>
         </nav>
