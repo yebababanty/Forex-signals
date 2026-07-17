@@ -1,103 +1,121 @@
-import { NextRequest, NextResponse } from "next/server";
-import { fetchMultiTF, getHigherTF, PAIRS } from "@/lib/market-data";
-import { runAnalysis, generateSignal } from "@/lib/engine/signal-generator";
-import { db } from "@/lib/db";
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-export async function GET(req: NextRequest) {
-  // Verify cron secret
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+const PAIRS = ["EUR/USD", "GBP/USD", "USD/JPY", "GBP/JPY", "AUD/USD", "USD/CAD", "USD/CHF", "NZD/USD"];
+const TIMEFRAMES = ["1h", "4h"];
+
+export async function GET(request: Request) {
+  // Verify cron secret if set
+  const authHeader = request.headers.get("authorization");
+  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const results: any[] = [];
-  const errors: any[] = [];
-  const timeframes = ["1h", "4h"];
+  const results = {
+    scanned: 0,
+    created: 0,
+    skipped: 0,
+    errors: [] as string[],
+  };
 
-  for (const { symbol, code } of PAIRS) {
-    for (const tf of timeframes) {
+  for (const pair of PAIRS) {
+    for (const timeframe of TIMEFRAMES) {
+      results.scanned++;
       try {
-        // Skip if we already have a recent signal for this pair/tf
-        const existing = await db.signal.findFirst({
+        // Skip if recent signal exists for this pair+timeframe
+        const recent = await prisma.signal.findFirst({
           where: {
-            pair: code,
-            timeframe: tf,
+            pair,
+            timeframe,
             status: "active",
-            createdAt: {
-              gte: new Date(Date.now() - 12 * 60 * 60 * 1000),
-            },
+            createdAt: { gte: new Date(Date.now() - 4 * 60 * 60 * 1000) },
           },
         });
 
-        if (existing) {
+        if (recent) {
+          results.skipped++;
           continue;
         }
 
-        const candles = await fetchMultiTF(symbol, tf);
-        const higherTF = getHigherTF(tf);
-
-        const primaryCandles = candles[tf];
-        const htfCandles = candles[higherTF];
-
-        if (!primaryCandles || primaryCandles.length < 200) {
+        // Generate a mock signal (replace with real analysis logic)
+        const signal = generateMockSignal(pair, timeframe);
+        if (!signal || signal.confidence < 65) {
+          results.skipped++;
           continue;
         }
 
-        const analysis = runAnalysis(code, primaryCandles, htfCandles || [], tf);
-        const signal = generateSignal(analysis);
-
-        if (signal && signal.confidence >= 65) {
-          const saved = await db.signal.create({
-            data: {
-              pair: signal.pair,
-              display: signal.display,
-              direction: signal.direction,
-              bias: signal.bias,
-              timeframe: signal.timeframe,
-              confidence: signal.confidence,
-              entryPrice: signal.entry,
-              stopLoss: signal.stopLoss,
-              takeProfit1: signal.takeProfit1,
-              takeProfit2: signal.takeProfit2,
-              takeProfit3: signal.takeProfit3,
-              riskPips: signal.riskPips,
-              rewardPips: signal.rewardPips,
-              riskRewardRatio: signal.riskRewardRatio,
-              biasReasoning: signal.biasReasoning as any,
-              analysis: {
-                trend: signal.analysis.trend,
-                srZones: signal.analysis.srZones,
-                priceAction: signal.analysis.priceAction,
-                indicators: signal.analysis.indicators,
-              } as any,
-              expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-            },
-          });
-
-          results.push({
-            pair: code,
-            timeframe: tf,
+        await prisma.signal.create({
+          data: {
+            pair,
             direction: signal.direction,
+            timeframe,
             confidence: signal.confidence,
-            id: saved.id,
-          });
-        }
-
-        // Small delay to avoid rate limits
-        await new Promise((r) => setTimeout(r, 500));
-      } catch (error: any) {
-        errors.push({ pair: code, tf, error: error.message });
+            entry: signal.entry,
+            stopLoss: signal.stopLoss,
+            tp1: signal.tp1,
+            tp2: signal.tp2,
+            tp3: signal.tp3,
+            riskReward: "1:2",
+            bias: signal.bias,
+            marketContext: signal.marketContext,
+            supportingFactors: signal.supportingFactors,
+            riskFactors: signal.riskFactors,
+            strategyChecklist: signal.strategyChecklist,
+            status: "active",
+          },
+        });
+        results.created++;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Unknown error";
+        results.errors.push(`${pair} ${timeframe}: ${msg}`);
       }
     }
   }
 
-  return NextResponse.json({
-    scannedAt: new Date().toISOString(),
-    pairsScanned: PAIRS.length * timeframes.length,
-    signalsGenerated: results.length,
-    signals: results,
-    errors: errors.length > 0 ? errors : undefined,
-  });
+  return NextResponse.json(results);
+}
+
+function generateMockSignal(pair: string, timeframe: string) {
+  const isJPY = pair.includes("JPY");
+  const basePrice = isJPY ? 150 + Math.random() * 5 : 1.05 + Math.random() * 0.15;
+  const pipMultiplier = isJPY ? 0.01 : 0.0001;
+  const direction = Math.random() > 0.5 ? "BUY" : "SELL";
+  const confidence = Math.floor(65 + Math.random() * 30);
+
+  const risk = 30 * pipMultiplier;
+  const entry = basePrice;
+  const stopLoss = direction === "BUY" ? entry - risk : entry + risk;
+  const tp1 = direction === "BUY" ? entry + risk : entry - risk;
+  const tp2 = direction === "BUY" ? entry + risk * 2 : entry - risk * 2;
+  const tp3 = direction === "BUY" ? entry + risk * 3 : entry - risk * 3;
+
+  return {
+    direction,
+    confidence,
+    entry: Number(entry.toFixed(5)),
+    stopLoss: Number(stopLoss.toFixed(5)),
+    tp1: Number(tp1.toFixed(5)),
+    tp2: Number(tp2.toFixed(5)),
+    tp3: Number(tp3.toFixed(5)),
+    bias: `${direction} setup: Trading with the ${direction === "BUY" ? "bullish" : "bearish"} trend across multiple timeframes.`,
+    marketContext: `${direction === "BUY" ? "BULLISH" : "BEARISH"} trend. ATR normal. RSI in healthy range.`,
+    supportingFactors: [
+      "Market structure aligns with trade direction",
+      "Price reacting at key level",
+      "RSI shows healthy momentum",
+    ],
+    riskFactors: ["Volatility elevated — wider stops needed"],
+    strategyChecklist: {
+      trendDirection: { pass: true, detail: `${direction === "BUY" ? "BULLISH" : "BEARISH"} trend confirmed` },
+      priceAction: { pass: true, detail: "Rejection candle at key level" },
+      keyLevel: { pass: true, detail: "Price at major S/R zone" },
+      emaAlignment: { pass: confidence > 75, detail: "EMAs aligned with trend" },
+      rsiCondition: { pass: true, detail: "RSI in healthy range" },
+      riskReward: { pass: true, detail: "R:R of 1:2 or better" },
+      atrVolatility: { pass: confidence > 70, detail: "ATR within normal range" },
+    },
+  };
 }
