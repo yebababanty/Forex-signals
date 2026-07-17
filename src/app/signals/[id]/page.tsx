@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
+import PriceChart from "@/components/PriceChart";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,17 @@ export default async function SignalDetailPage({
   const analysis = signal.analysis as any;
   const isBuy = signal.direction === "BUY";
 
+  // Extract S/R levels for chart
+  const supportLevels = analysis?.srZones
+    ?.filter((z: any) => z.type === "support")
+    ?.map((z: any) => z.price)
+    ?.slice(0, 3) || [];
+
+  const resistanceLevels = analysis?.srZones
+    ?.filter((z: any) => z.type === "resistance")
+    ?.map((z: any) => z.price)
+    ?.slice(0, 3) || [];
+
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       <div>
@@ -28,6 +40,19 @@ export default async function SignalDetailPage({
         </h1>
         <p className="text-slate-400 mt-1">{signal.timeframe} timeframe</p>
       </div>
+
+      {/* CHART */}
+      <PriceChart
+        pair={signal.pair}
+        timeframe={signal.timeframe}
+        entry={signal.entryPrice}
+        stopLoss={signal.stopLoss}
+        takeProfit1={signal.takeProfit1}
+        takeProfit2={signal.takeProfit2}
+        takeProfit3={signal.takeProfit3}
+        supportLevels={supportLevels}
+        resistanceLevels={resistanceLevels}
+      />
 
       <div className="card">
         <div className="flex items-center justify-between">
