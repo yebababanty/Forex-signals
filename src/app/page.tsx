@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/prisma";
 
-const prisma = new PrismaClient();
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 async function getSignals() {
   try {
@@ -26,14 +27,13 @@ export default async function Home() {
   function timeAgo(date: Date) {
     const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
     const hours = Math.floor(seconds / 3600);
-    if (hours < 1) return `${Math.floor(seconds / 60)}m`;
+    if (hours < 1) return `${Math.max(1, Math.floor(seconds / 60))}m`;
     if (hours < 24) return `${hours}h`;
     return `${Math.floor(hours / 24)}d`;
   }
 
   return (
     <div className="min-h-screen bg-slate-900 text-white">
-      {/* Navigation */}
       <nav className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
         <Link href="/" className="text-emerald-400 font-bold text-lg">
           📈 ForexSignals
@@ -47,10 +47,8 @@ export default async function Home() {
       </nav>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {/* Title */}
         <h1 className="text-2xl font-bold">📊 Dashboard</h1>
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-slate-800 rounded-lg p-4">
             <p className="text-xs text-slate-400">Active Signals</p>
@@ -68,7 +66,6 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* Pair Analysis Buttons */}
         <div className="grid grid-cols-4 gap-2">
           {PAIRS.map((pair) => (
             <Link
@@ -82,7 +79,6 @@ export default async function Home() {
           ))}
         </div>
 
-        {/* Active Signals */}
         <div>
           <h2 className="text-lg font-bold mb-3">Active Signals</h2>
           {signals.length === 0 ? (

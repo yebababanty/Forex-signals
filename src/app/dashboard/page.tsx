@@ -63,7 +63,7 @@ export default async function DashboardPage() {
                 <div className="card hover:bg-slate-700 transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold">{signal.display}</span>
+                      <span className="text-lg font-bold">{signal.pair}</span>
                       <span className={`badge ${signal.direction === "BUY" ? "badge-buy" : "badge-sell"}`}>
                         {signal.direction === "BUY" ? "▲" : "▼"} {signal.direction}
                       </span>
