@@ -13,11 +13,7 @@ export default function ScanPage() {
     setError("");
     setResult(null);
     try {
-      const res = await fetch("/api/cron/scan", {
-        headers: {
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET || "manual-scan"}`,
-        },
-      });
+      const res = await fetch("/api/scan-manual", { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Scan failed");
@@ -40,23 +36,20 @@ export default function ScanPage() {
           Scans all 8 major forex pairs on 1H and 4H timeframes. Only saves signals with 65%+ confidence.
         </p>
         <p className="text-sm text-slate-400 mb-4">
-          ℹ️ This scan runs automatically every 4 hours (Mon-Fri). Use this button to trigger it manually.
+          ℹ️ This scan also runs automatically every day at 8am UTC (Mon-Fri).
         </p>
         <button
           onClick={runScan}
           disabled={loading}
           className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
         >
-          {loading ? "⏳ Scanning 16 markets... (~30 seconds)" : "🚀 Scan All Pairs Now"}
+          {loading ? "⏳ Scanning 16 markets... (~30-60 seconds)" : "🚀 Scan All Pairs Now"}
         </button>
       </div>
 
       {error && (
         <div className="card border-red-500/20 bg-red-500/5">
           <p className="text-red-400">❌ {error}</p>
-          <p className="text-xs text-slate-500 mt-2">
-            Note: Manual scanning requires the CRON_SECRET. This works automatically via Vercel cron.
-          </p>
         </div>
       )}
 
@@ -94,9 +87,9 @@ export default function ScanPage() {
 
           {result.signals?.length === 0 && (
             <div className="card border-yellow-500/20 bg-yellow-500/5">
-              <p className="text-yellow-400 font-semibold">⚠️ No signals generated</p>
+              <p className="text-yellow-400 font-semibold">⚠️ No new signals generated</p>
               <p className="text-sm text-slate-400 mt-2">
-                All pairs scanned but no setups meet the 65%+ confidence threshold with all 3 strategy pillars aligned. Try again later or during more volatile market hours.
+                All pairs scanned but no new setups meet the 65%+ confidence threshold. Existing recent signals were skipped to avoid duplicates. Try again in a few hours or during more volatile market hours.
               </p>
             </div>
           )}
