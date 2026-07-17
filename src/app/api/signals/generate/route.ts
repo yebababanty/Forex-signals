@@ -53,7 +53,6 @@ export async function POST(req: NextRequest) {
     const saved = await db.signal.create({
       data: {
         pair: signal.pair,
-        display: signal.display,
         direction: signal.direction,
         bias: signal.bias,
         timeframe: signal.timeframe,
