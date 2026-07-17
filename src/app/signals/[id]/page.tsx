@@ -1,219 +1,388 @@
-import { db } from "@/lib/db";
-import { notFound } from "next/navigation";
-import PriceChart from "@/components/PriceChart";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import Link from "next/link";
 
-export default async function SignalDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-  const signal = await db.signal.findUnique({ where: { id } });
+interface Signal {
+  id: string;
+  pair: string;
+  direction: string;
+  timeframe: string;
+  confidence: number;
+  entry: number;
+  stopLoss: number;
+  tp1: number;
+  tp2: number;
+  tp3: number;
+  riskReward: string;
+  bias: string;
+  marketContext: string;
+  supportingFactors: string[];
+  riskFactors: string[];
+  strategyChecklist: {
+    trendDirection: { pass: boolean; detail: string };
+    priceAction: { pass: boolean; detail: string };
+    keyLevel: { pass: boolean; detail: string };
+    emaAlignment: { pass: boolean; detail: string };
+    rsiCondition: { pass: boolean; detail: string };
+    riskReward: { pass: boolean; detail: string };
+    atrVolatility: { pass: boolean; detail: string };
+  };
+  chartImageUrl?: string;
+  createdAt: string;
+}
 
-  if (!signal) notFound();
+export default function SignalDetailPage() {
+  const params = useParams();
+  const [signal, setSignal] = useState<Signal | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const reasoning = signal.biasReasoning as any;
-  const analysis = signal.analysis as any;
-  const isBuy = signal.direction === "BUY";
+  useEffect(() => {
+    async function fetchSignal() {
+      try {
+        const res = await fetch(`/api/signals/${params.id}`);
+        const data = await res.json();
+        setSignal(data);
+      } catch (error) {
+        console.error("Failed to fetch signal:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchSignal();
+  }, [params.id]);
 
-  // Extract S/R levels for chart
-  const supportLevels = analysis?.srZones
-    ?.filter((z: any) => z.type === "support")
-    ?.map((z: any) => z.price)
-    ?.slice(0, 3) || [];
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-emerald-400"></div>
+      </div>
+    );
+  }
 
-  const resistanceLevels = analysis?.srZones
-    ?.filter((z: any) => z.type === "resistance")
-    ?.map((z: any) => z.price)
-    ?.slice(0, 3) || [];
+  if (!signal) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">
+        <p>Signal not found</p>
+      </div>
+    );
+  }
+
+  const riskPips = Math.abs(signal.entry - signal.stopLoss) * (signal.pair.includes("JPY") ? 100 : 10000);
+  const rewardPips = Math.abs(signal.tp2 - signal.entry) * (signal.pair.includes("JPY") ? 100 : 10000);
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <div>
-        <h1 className="text-3xl font-bold flex items-center gap-3 flex-wrap">
-          {signal.display}
-          <span className={`badge text-base ${isBuy ? "badge-buy" : "badge-sell"}`}>
-            {isBuy ? "▲" : "▼"} {signal.direction}
-          </span>
-        </h1>
-        <p className="text-slate-400 mt-1">{signal.timeframe} timeframe</p>
-      </div>
+    <div className="min-h-screen bg-slate-900 text-white">
+      {/* Navigation */}
+      <nav className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
+        <Link href="/" className="text-emerald-400 font-bold text-lg">
+          📈 ForexSignals
+        </Link>
+        <div className="flex gap-4 text-sm text-slate-400">
+          <Link href="/" className="hover:text-white">Dashboard</Link>
+          <Link href="/signals" className="hover:text-white">Signals</Link>
+          <Link href="/analysis" className="hover:text-white">Analysis</Link>
+          <Link href="/scan" className="hover:text-white">🔄 Scan</Link>
+        </div>
+      </nav>
 
-      {/* CHART */}
-      <PriceChart
-        pair={signal.pair}
-        timeframe={signal.timeframe}
-        entry={signal.entryPrice}
-        stopLoss={signal.stopLoss}
-        takeProfit1={signal.takeProfit1}
-        takeProfit2={signal.takeProfit2}
-        takeProfit3={signal.takeProfit3}
-        supportLevels={supportLevels}
-        resistanceLevels={resistanceLevels}
-      />
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        {/* Header */}
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">{signal.pair}</h1>
+            <span className={`px-3 py-1 rounded text-sm font-bold ${
+              signal.direction === "BUY" 
+                ? "bg-emerald-500/20 text-emerald-400" 
+                : "bg-red-500/20 text-red-400"
+            }`}>
+              {signal.direction === "BUY" ? "▲" : "▼"} {signal.direction}
+            </span>
+          </div>
+          <p className="text-slate-400 text-sm mt-1">{signal.timeframe} timeframe</p>
+        </div>
 
-      <div className="card">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm text-slate-400">Signal Confidence</div>
-            <div className={`text-lg font-bold mt-1 ${signal.bias === "BULLISH" ? "text-emerald-400" : "text-red-400"}`}>
-              {signal.bias}
+        {/* Chart */}
+        {signal.chartImageUrl && (
+          <div className="card">
+            <p className="text-xs text-slate-400 mb-2">{signal.pair} • {signal.timeframe}</p>
+            <img 
+              src={signal.chartImageUrl} 
+              alt={`${signal.pair} chart`}
+              className="w-full rounded-lg"
+            />
+            <div className="flex items-center gap-4 mt-3 text-xs text-slate-400">
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-blue-400"></span> Entry
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-red-400"></span> SL
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> TPs
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-purple-400"></span> Support
+              </span>
             </div>
           </div>
-          <div className={`text-4xl font-bold ${signal.confidence >= 80 ? "text-emerald-400" : signal.confidence >= 65 ? "text-yellow-400" : "text-red-400"}`}>
-            {signal.confidence}%
-          </div>
-        </div>
-        <div className="mt-3 bg-slate-700 rounded-full h-3">
-          <div
-            className={`h-3 rounded-full ${signal.confidence >= 80 ? "bg-emerald-400" : signal.confidence >= 65 ? "bg-yellow-400" : "bg-red-400"}`}
-            style={{ width: `${signal.confidence}%` }}
-          />
-        </div>
-      </div>
+        )}
 
-      <div className="card">
-        <h2 className="text-lg font-bold mb-4">📊 Trade Levels</h2>
-        <div className="flex items-center gap-1 mb-4">
-          <div className="bg-red-500/30 h-8 rounded-l-lg flex items-center justify-center text-xs font-semibold text-red-300 px-2 flex-1">
-            Risk: {signal.riskPips}p
-          </div>
-          <div className="bg-emerald-500/30 h-8 rounded-r-lg flex items-center justify-center text-xs font-semibold text-emerald-300 px-2" style={{ flex: signal.riskRewardRatio }}>
-            Reward: {signal.rewardPips}p
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <LevelRow label="🔵 Entry" value={signal.entryPrice} color="text-blue-400" />
-          <LevelRow label="🔴 Stop Loss" value={signal.stopLoss} color="text-red-400" />
-          <div className="border-t border-slate-700 my-2" />
-          <LevelRow label="🟢 TP 1 (1:1)" value={signal.takeProfit1} color="text-emerald-400" />
-          <LevelRow label="🟢 TP 2 (1:2)" value={signal.takeProfit2} color="text-emerald-400" />
-          <LevelRow label="🟢 TP 3 (1:3)" value={signal.takeProfit3} color="text-emerald-400" />
-        </div>
-
-        <div className="mt-4 text-center bg-slate-700 rounded-lg p-2">
-          <span className="text-sm text-slate-400">Risk/Reward: </span>
-          <span className="font-bold text-emerald-400">1:{signal.riskRewardRatio}</span>
-        </div>
-      </div>
-
-      {reasoning && (
+        {/* Signal Confidence */}
         <div className="card">
-          <h2 className="text-lg font-bold mb-4">🧠 Trade Bias & Reasoning</h2>
+          <p className="text-sm text-slate-400">Signal Confidence</p>
+          <div className="flex items-center justify-between mt-1">
+            <span className={`text-lg font-bold ${
+              signal.direction === "BUY" ? "text-emerald-400" : "text-red-400"
+            }`}>
+              {signal.direction === "BUY" ? "BULLISH" : "BEARISH"}
+            </span>
+            <span className="text-3xl font-bold text-emerald-400">{signal.confidence}%</span>
+          </div>
+          <div className="w-full bg-slate-700 rounded-full h-2 mt-3">
+            <div 
+              className="bg-emerald-400 h-2 rounded-full transition-all duration-500"
+              style={{ width: `${signal.confidence}%` }}
+            ></div>
+          </div>
+        </div>
 
-          <div className="bg-slate-900 rounded-lg p-4 mb-4 border-l-4 border-yellow-400">
-            <div className="flex items-start gap-3">
-              <span className="text-2xl">💡</span>
-              <p className="text-slate-200 leading-relaxed">{reasoning.primary}</p>
+        {/* Trade Levels */}
+        <div className="card">
+          <h3 className="text-lg font-bold mb-3">📊 Trade Levels</h3>
+          
+          {/* Risk/Reward Bar */}
+          <div className="flex rounded-lg overflow-hidden mb-4">
+            <div className="bg-red-500/80 text-white text-xs font-semibold py-2 px-3 text-center"
+                 style={{ width: `${(riskPips / (riskPips + rewardPips)) * 100}%` }}>
+              Risk: {riskPips.toFixed(1)}p
+            </div>
+            <div className="bg-emerald-500/80 text-white text-xs font-semibold py-2 px-3 text-center flex-1">
+              Reward: {rewardPips.toFixed(1)}p
             </div>
           </div>
 
-          <div className="bg-slate-900/50 rounded-lg p-3 mb-4">
-            <div className="text-xs uppercase tracking-wider text-slate-500 mb-1">Market Context</div>
-            <p className="text-sm text-slate-300">{reasoning.marketContext}</p>
-          </div>
-
-          {reasoning.supporting?.length > 0 && (
-            <Section title="✅ Supporting Factors" color="text-emerald-400" items={reasoning.supporting} bulletColor="text-emerald-500" />
-          )}
-
-          {reasoning.conflicting?.length > 0 && (
-            <Section title="⚠️ Conflicting Factors" color="text-yellow-400" items={reasoning.conflicting} bulletColor="text-yellow-500" />
-          )}
-
-          {reasoning.riskFactors?.length > 0 && (
-            <Section title="🛡️ Risk Factors" color="text-red-400" items={reasoning.riskFactors} bulletColor="text-red-500" />
-          )}
-        </div>
-      )}
-
-      {reasoning?.strategy && (
-        <div className="card">
-          <h2 className="text-lg font-bold mb-4">⚡ Strategy Checklist</h2>
           <div className="space-y-3">
-            <StratCheck label="1. Trend Direction" detail={reasoning.strategy.trendAlignment} passed={true} />
-            <StratCheck label="2. Price Action" detail={reasoning.strategy.priceActionConfirmation} passed={true} />
-            <StratCheck label="3. S/R Zone" detail={reasoning.strategy.keyLevelAction} passed={reasoning.strategy.keyLevelAction !== "No strong key level interaction"} />
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2 text-sm">
+                <span className="w-2 h-2 rounded-full bg-blue-400"></span> Entry
+              </span>
+              <span className="font-mono text-emerald-400">{signal.entry.toFixed(5)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2 text-sm">
+                <span className="w-2 h-2 rounded-full bg-red-400"></span> Stop Loss
+              </span>
+              <span className="font-mono text-red-400">{signal.stopLoss.toFixed(5)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2 text-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> TP 1 (1:1)
+              </span>
+              <span className="font-mono">{signal.tp1.toFixed(5)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2 text-sm">
+                <span className="w-2 h-2 rounded-full bg-yellow-400"></span> TP 2 (1:2)
+              </span>
+              <span className="font-mono">{signal.tp2.toFixed(5)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2 text-sm">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span> TP 3 (1:3)
+              </span>
+              <span className="font-mono">{signal.tp3.toFixed(5)}</span>
+            </div>
+          </div>
+
+          <div className="mt-4 bg-slate-700/50 rounded-lg py-2 text-center text-sm">
+            Risk/Reward: <span className="text-emerald-400 font-bold">{signal.riskReward}</span>
           </div>
         </div>
-      )}
 
-      {analysis?.indicators && (
+        {/* Trade Bias & Reasoning */}
         <div className="card">
-          <h2 className="text-lg font-bold mb-4">📈 Indicators</h2>
-          <div className="grid grid-cols-2 gap-3">
-            <IndicatorBox label="RSI (14)" value={analysis.indicators.rsi} />
-            <IndicatorBox label="ATR" value={`${analysis.indicators.atrPips}p`} />
-            {analysis.trend && (
-              <>
-                <IndicatorBox label="Trend Strength" value={`${analysis.trend.strength}%`} />
-                <IndicatorBox label="HTF Bias" value={analysis.trend.higherTFBias} />
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div className="card border-yellow-500/20 bg-yellow-500/5">
-        <div className="flex gap-3">
-          <span className="text-2xl">⚠️</span>
-          <div>
-            <h3 className="font-semibold text-yellow-400">Risk Disclaimer</h3>
-            <p className="text-sm text-slate-400 mt-1">
-              This is an automated analysis tool, not financial advice. Always do your own research and use proper risk management.
+          <h3 className="text-lg font-bold mb-3">🧠 Trade Bias & Reasoning</h3>
+          
+          <div className="border-l-2 border-emerald-400 pl-4 mb-4">
+            <p className="text-sm text-slate-300 leading-relaxed">
+              💡 {signal.bias}
             </p>
           </div>
+
+          <div className="bg-slate-800/50 rounded-lg p-3 mb-4">
+            <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Market Context</p>
+            <p className="text-sm text-slate-300">{signal.marketContext}</p>
+          </div>
+
+          {/* Supporting Factors */}
+          <div className="mb-4">
+            <p className="text-emerald-400 font-semibold text-sm mb-2">✅ Supporting Factors</p>
+            <ul className="space-y-1">
+              {signal.supportingFactors.map((factor, i) => (
+                <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
+                  <span className="text-slate-500">›</span>
+                  {factor}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Risk Factors */}
+          <div>
+            <p className="text-red-400 font-semibold text-sm mb-2">🚨 Risk Factors</p>
+            <ul className="space-y-1">
+              {signal.riskFactors.map((factor, i) => (
+                <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
+                  <span className="text-slate-500">›</span>
+                  {factor}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* Strategy Checklist */}
+        <div className="card">
+          <h3 className="text-lg font-bold mb-4">⚡ Strategy Checklist</h3>
+          
+          <div className="space-y-4">
+            {/* 1. Trend Direction */}
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 ${signal.strategyChecklist.trendDirection.pass ? "text-emerald-400" : "text-red-400"}`}>
+                {signal.strategyChecklist.trendDirection.pass ? "✅" : "❌"}
+              </span>
+              <div>
+                <p className="font-semibold text-sm">1. Trend Direction</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {signal.strategyChecklist.trendDirection.detail}
+                </p>
+              </div>
+            </div>
+
+            {/* 2. Price Action */}
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 ${signal.strategyChecklist.priceAction.pass ? "text-emerald-400" : "text-red-400"}`}>
+                {signal.strategyChecklist.priceAction.pass ? "✅" : "❌"}
+              </span>
+              <div>
+                <p className="font-semibold text-sm">2. Price Action</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {signal.strategyChecklist.priceAction.detail}
+                </p>
+              </div>
+            </div>
+
+            {/* 3. Key Level */}
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 ${signal.strategyChecklist.keyLevel.pass ? "text-emerald-400" : "text-red-400"}`}>
+                {signal.strategyChecklist.keyLevel.pass ? "✅" : "❌"}
+              </span>
+              <div>
+                <p className="font-semibold text-sm">3. Key Level</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {signal.strategyChecklist.keyLevel.detail}
+                </p>
+              </div>
+            </div>
+
+            {/* 4. EMA Alignment */}
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 ${signal.strategyChecklist.emaAlignment.pass ? "text-emerald-400" : "text-red-400"}`}>
+                {signal.strategyChecklist.emaAlignment.pass ? "✅" : "❌"}
+              </span>
+              <div>
+                <p className="font-semibold text-sm">4. EMA Alignment</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {signal.strategyChecklist.emaAlignment.detail}
+                </p>
+              </div>
+            </div>
+
+            {/* 5. RSI Condition */}
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 ${signal.strategyChecklist.rsiCondition.pass ? "text-emerald-400" : "text-red-400"}`}>
+                {signal.strategyChecklist.rsiCondition.pass ? "✅" : "❌"}
+              </span>
+              <div>
+                <p className="font-semibold text-sm">5. RSI Condition</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {signal.strategyChecklist.rsiCondition.detail}
+                </p>
+              </div>
+            </div>
+
+            {/* 6. Risk/Reward */}
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 ${signal.strategyChecklist.riskReward.pass ? "text-emerald-400" : "text-red-400"}`}>
+                {signal.strategyChecklist.riskReward.pass ? "✅" : "❌"}
+              </span>
+              <div>
+                <p className="font-semibold text-sm">6. Risk/Reward Ratio</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {signal.strategyChecklist.riskReward.detail}
+                </p>
+              </div>
+            </div>
+
+            {/* 7. ATR Volatility */}
+            <div className="flex items-start gap-3">
+              <span className={`mt-0.5 ${signal.strategyChecklist.atrVolatility.pass ? "text-emerald-400" : "text-yellow-400"}`}>
+                {signal.strategyChecklist.atrVolatility.pass ? "✅" : "⚠️"}
+              </span>
+              <div>
+                <p className="font-semibold text-sm">7. ATR Volatility</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {signal.strategyChecklist.atrVolatility.detail}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Summary */}
+          <div className="mt-6 pt-4 border-t border-slate-700">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-slate-400">Checks Passed</span>
+              <span className="text-emerald-400 font-bold">
+                {Object.values(signal.strategyChecklist).filter(c => c.pass).length}/7
+              </span>
+            </div>
+            <div className="w-full bg-slate-700 rounded-full h-1.5 mt-2">
+              <div 
+                className="bg-emerald-400 h-1.5 rounded-full"
+                style={{ 
+                  width: `${(Object.values(signal.strategyChecklist).filter(c => c.pass).length / 7) * 100}%` 
+                }}
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Final Verdict */}
+        <div className="card border border-emerald-500/20">
+          <h3 className="text-lg font-bold mb-2">🎯 Final Verdict</h3>
+          <div className={`text-2xl font-bold ${
+            signal.confidence >= 80 ? "text-emerald-400" : 
+            signal.confidence >= 65 ? "text-yellow-400" : "text-red-400"
+          }`}>
+            {signal.confidence >= 80 ? "STRONG" : signal.confidence >= 65 ? "MODERATE" : "WEAK"} {signal.direction}
+          </div>
+          <p className="text-sm text-slate-400 mt-2">
+            {signal.confidence >= 80 
+              ? "High probability setup. All major criteria met. Consider full position size."
+              : signal.confidence >= 65 
+                ? "Decent setup with some caveats. Consider reduced position size."
+                : "Weak setup. Consider skipping or using minimal size."
+            }
+          </p>
+        </div>
+
+        {/* Timestamp */}
+        <div className="text-center text-xs text-slate-500 pb-8">
+          Signal generated: {new Date(signal.createdAt).toLocaleString()}
         </div>
       </div>
-    </div>
-  );
-}
-
-function LevelRow({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-slate-400">{label}</span>
-      <span className={`font-mono font-bold ${color}`}>{value}</span>
-    </div>
-  );
-}
-
-function Section({ title, color, items, bulletColor }: { title: string; color: string; items: string[]; bulletColor: string }) {
-  return (
-    <div className="mb-4">
-      <h3 className={`text-sm font-semibold ${color} mb-2`}>{title}</h3>
-      <ul className="space-y-1.5">
-        {items.map((item, i) => (
-          <li key={i} className="flex items-start gap-2 text-sm text-slate-300">
-            <span className={`${bulletColor} mt-0.5`}>›</span>
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function StratCheck({ label, detail, passed }: { label: string; detail: string; passed: boolean }) {
-  return (
-    <div className={`flex items-start gap-3 p-3 rounded-lg ${passed ? "bg-emerald-500/5 border border-emerald-500/10" : "bg-yellow-500/5 border border-yellow-500/10"}`}>
-      <span className="text-lg">{passed ? "✅" : "⚠️"}</span>
-      <div>
-        <div className="font-semibold text-sm">{label}</div>
-        <div className="text-sm text-slate-400 mt-0.5">{detail}</div>
-      </div>
-    </div>
-  );
-}
-
-function IndicatorBox({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="bg-slate-900 rounded-lg p-3">
-      <div className="text-xs text-slate-500 uppercase">{label}</div>
-      <div className="text-xl font-bold mt-1">{value}</div>
     </div>
   );
 }

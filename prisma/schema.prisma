@@ -8,33 +8,26 @@ datasource db {
 }
 
 model Signal {
-  id         String   @id @default(cuid())
-  pair       String
-  display    String
-  direction  String
-  bias       String
-  timeframe  String
-  confidence Float
-
-  entryPrice  Float
-  stopLoss    Float
-  takeProfit1 Float
-  takeProfit2 Float
-  takeProfit3 Float
-
-  riskPips        Float
-  rewardPips      Float
-  riskRewardRatio Float
-
-  biasReasoning Json
-  analysis      Json
-
-  status     String  @default("active")
-  resultPips Float?
-
-  createdAt DateTime  @default(now())
-  expiresAt DateTime
-  closedAt  DateTime?
+  id                 String   @id @default(cuid())
+  pair               String
+  direction          String
+  timeframe          String
+  confidence         Int
+  entry              Float
+  stopLoss           Float
+  tp1                Float
+  tp2                Float
+  tp3                Float
+  riskReward         String   @default("1:2")
+  bias               String   @db.Text
+  marketContext      String   @db.Text
+  supportingFactors  Json
+  riskFactors        Json
+  strategyChecklist  Json
+  chartImageUrl      String?
+  status             String   @default("active")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@index([pair])
   @@index([status])
