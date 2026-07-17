@@ -156,6 +156,6 @@ function calculateLevels(
     takeProfit3: parseFloat(tp3.toFixed(decimals)),
     riskPips: parseFloat(riskPips.toFixed(1)),
     rewardPips: parseFloat(rewardPips.toFixed(1)),
-    riskRewardRatio: parseFloat((rewardPips / riskPips).toFixed(2)),
+    riskReward: parseFloat((rewardPips / riskPips).toFixed(2)),
   };
 }

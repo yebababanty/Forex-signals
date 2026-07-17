@@ -147,7 +147,7 @@ export default function AnalysisPage({
             <div>Entry: <span className="font-mono font-bold text-blue-400">{signal.entryPrice}</span></div>
             <div>SL: <span className="font-mono font-bold text-red-400">{signal.stopLoss}</span></div>
             <div>TP1: <span className="font-mono font-bold text-emerald-400">{signal.takeProfit1}</span></div>
-            <div>RR: <span className="font-bold">1:{signal.riskRewardRatio}</span></div>
+            <div>RR: <span className="font-bold">1:{signal.riskReward}</span></div>
           </div>
         </div>
       )}

@@ -37,7 +37,7 @@ export default async function SignalsPage() {
                     <span className={`font-semibold ${signal.confidence >= 80 ? "text-emerald-400" : "text-yellow-400"}`}>
                       {signal.confidence}%
                     </span>
-                    <span className="text-slate-400">RR 1:{signal.riskRewardRatio}</span>
+                    <span className="text-slate-400">RR 1:{signal.riskReward}</span>
                   </div>
                 </div>
               </div>

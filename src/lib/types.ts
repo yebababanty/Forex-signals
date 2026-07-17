@@ -76,7 +76,7 @@ export interface TradeSetup {
   takeProfit3: number;
   riskPips: number;
   rewardPips: number;
-  riskRewardRatio: number;
+  riskReward: number;
   biasReasoning: BiasReasoning;
   analysis: AnalysisResult;
 }
