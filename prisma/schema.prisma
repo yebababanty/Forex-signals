@@ -13,23 +13,27 @@ model Signal {
   direction          String
   timeframe          String
   confidence         Int
-  entry              Float
-  stopLoss           Float
-  tp1                Float
-  tp2                Float
-  tp3                Float
+  entry              Float    @default(0)
+  stopLoss           Float    @default(0)
+  tp1                Float    @default(0)
+  tp2                Float    @default(0)
+  tp3                Float    @default(0)
   riskReward         String   @default("1:2")
-  bias               String   @db.Text
-  marketContext      String   @db.Text
-  supportingFactors  Json
-  riskFactors        Json
-  strategyChecklist  Json
+  bias               String   @default("") @db.Text
+  marketContext      String   @default("") @db.Text
+  supportingFactors  Json     @default("[]")
+  riskFactors        Json     @default("[]")
+  strategyChecklist  Json     @default("{}")
   chartImageUrl      String?
   status             String   @default("active")
+  outcome            String   @default("PENDING")
+  outcomeHitAt       DateTime?
+  pipsGained         Float?
   createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  updatedAt          DateTime @default(now()) @updatedAt
 
   @@index([pair])
   @@index([status])
+  @@index([outcome])
   @@index([createdAt])
 }
