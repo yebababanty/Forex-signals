@@ -24,9 +24,34 @@ function getSpec(symbol: string) {
   return { pipSize: 0.0001, decimals: 5, pipLabel: "pips" };
 }
 
+function getTVSymbol(pair: string) {
+  const map: Record<string, string> = {
+    "EUR/USD": "FX:EURUSD",
+    "GBP/USD": "FX:GBPUSD",
+    "USD/JPY": "FX:USDJPY",
+    "GBP/JPY": "FX:GBPJPY",
+    "AUD/USD": "FX:AUDUSD",
+    "USD/CAD": "FX:USDCAD",
+    "USD/CHF": "FX:USDCHF",
+    "NZD/USD": "FX:NZDUSD",
+    "XAU/USD": "OANDA:XAUUSD",
+    "XAG/USD": "OANDA:XAGUSD",
+    "USOIL": "TVC:USOIL",
+    "NAS100": "OANDA:NAS100USD",
+    "US30": "OANDA:US30USD",
+  };
+  return map[pair] || pair.replace("/", "");
+}
+
+function getTVInterval(tf: string) {
+  const map: Record<string, string> = { "1m": "1", "5m": "5", "15m": "15", "1h": "60", "4h": "240", "1d": "D" };
+  return map[tf] || "60";
+}
+
 export default function SignalDetailPage() {
   const params = useParams();
   const [signal, setSignal] = useState<Signal | null>(null);
+  const [livePrice, setLivePrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
 
@@ -36,10 +61,30 @@ export default function SignalDetailPage() {
         const res = await fetch(`/api/signals/${params.id}`);
         const data = await res.json();
         setSignal(data);
+        // Fetch current live price
+        if (data?.pair) {
+          const priceRes = await fetch(`/api/price?symbol=${encodeURIComponent(data.pair)}`);
+          const priceData = await priceRes.json();
+          if (priceData?.price) setLivePrice(priceData.price);
+        }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     }
     if (params.id) load();
+
+    // Refresh live price every 30 seconds
+    const interval = setInterval(async () => {
+      if (signal?.pair) {
+        try {
+          const priceRes = await fetch(`/api/price?symbol=${encodeURIComponent(signal.pair)}`);
+          const priceData = await priceRes.json();
+          if (priceData?.price) setLivePrice(priceData.price);
+        } catch (e) { /* ignore */ }
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.id]);
 
   async function markOutcome(outcome: string) {
@@ -94,31 +139,12 @@ export default function SignalDetailPage() {
   const passed = Object.values(checklist).filter((c) => c?.pass).length;
   const total = Object.keys(checklist).length || 7;
 
-  // === CHART ===
-  const cw = 500, ch = 280;
-  const priceRange = Math.abs(signal.entry - signal.stopLoss) * 4;
-  const midPrice = signal.entry;
-  const minP = midPrice - priceRange / 2;
-  const maxP = midPrice + priceRange / 2;
-  const yFor = (p: number) => ch - ((p - minP) / (maxP - minP)) * ch;
+  // Price movement since signal
+  const priceMove = livePrice ? ((livePrice - signal.entry) / spec.pipSize) : 0;
+  const priceMoveInDirection = isBuy ? priceMove : -priceMove;
 
-  // Generate realistic candles
-  const numCandles = 30;
-  const candles = [];
-  let lastClose = isBuy ? minP + priceRange * 0.15 : maxP - priceRange * 0.15;
-  for (let i = 0; i < numCandles; i++) {
-    const progress = i / (numCandles - 1);
-    const target = isBuy
-      ? minP + priceRange * 0.25 + progress * priceRange * 0.25
-      : maxP - priceRange * 0.25 - progress * priceRange * 0.25;
-    const noise = (Math.sin(i * 1.7) + Math.cos(i * 0.9)) * priceRange * 0.03;
-    const close = target + noise;
-    const open = lastClose;
-    const high = Math.max(open, close) + Math.abs(Math.sin(i * 2.3)) * priceRange * 0.02;
-    const low = Math.min(open, close) - Math.abs(Math.cos(i * 1.9)) * priceRange * 0.02;
-    lastClose = close;
-    candles.push({ open, high, low, close, x: (i / (numCandles - 1)) * (cw - 70) + 20 });
-  }
+  const tvSymbol = getTVSymbol(signal.pair);
+  const tvInterval = getTVInterval(signal.timeframe);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
@@ -141,70 +167,43 @@ export default function SignalDetailPage() {
         <p className="text-slate-400 text-sm mt-1">{signal.timeframe} timeframe</p>
       </div>
 
-      {/* CHART */}
-      <div className="bg-slate-800 rounded-lg p-4">
-        <div className="flex justify-between items-center mb-3">
-          <p className="text-xs text-slate-400">{signal.pair} • {signal.timeframe.toUpperCase()}</p>
-          <p className="text-xs text-slate-500">Live price at signal: {signal.entry.toFixed(spec.decimals)}</p>
+      {/* Live Price Ticker */}
+      {livePrice && (
+        <div className="bg-slate-800 rounded-lg p-4 border border-emerald-500/20">
+          <div className="flex justify-between items-center">
+            <div>
+              <p className="text-xs text-slate-400 uppercase tracking-wider">🔴 Live Price</p>
+              <p className="text-2xl font-bold text-white mt-1">{livePrice.toFixed(spec.decimals)}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-400">Since Signal</p>
+              <p className={`text-lg font-bold ${
+                priceMoveInDirection > 0 ? "text-emerald-400" :
+                priceMoveInDirection < 0 ? "text-red-400" : "text-slate-400"
+              }`}>
+                {priceMoveInDirection > 0 ? "+" : ""}{priceMoveInDirection.toFixed(1)} {spec.pipLabel}
+              </p>
+            </div>
+          </div>
         </div>
-        <div className="bg-slate-900 rounded p-2">
-          <svg viewBox={`0 0 ${cw} ${ch}`} className="w-full" preserveAspectRatio="xMidYMid meet" style={{ maxHeight: 320 }}>
-            {/* Grid */}
-            {[0.2, 0.4, 0.6, 0.8].map((r) => (
-              <line key={r} x1="0" y1={ch * r} x2={cw - 70} y2={ch * r}
-                stroke="#334155" strokeWidth="0.5" strokeDasharray="2,2" />
-            ))}
-            {/* Candles */}
-            {candles.map((c, i) => {
-              const bull = c.close >= c.open;
-              const color = bull ? "#10b981" : "#ef4444";
-              const bodyH = Math.max(1, Math.abs(yFor(c.open) - yFor(c.close)));
-              return (
-                <g key={i}>
-                  <line x1={c.x} y1={yFor(c.high)} x2={c.x} y2={yFor(c.low)} stroke={color} strokeWidth="1" />
-                  <rect x={c.x - 3.5} y={yFor(Math.max(c.open, c.close))} width="7" height={bodyH} fill={color} />
-                </g>
-              );
-            })}
-            {/* Entry line */}
-            <line x1="0" y1={yFor(signal.entry)} x2={cw - 70} y2={yFor(signal.entry)}
-              stroke="#3b82f6" strokeWidth="1.5" strokeDasharray="4,3" />
-            <rect x={cw - 68} y={yFor(signal.entry) - 9} width="66" height="18" fill="#3b82f6" rx="2" />
-            <text x={cw - 35} y={yFor(signal.entry) + 4} textAnchor="middle" fontSize="10" fill="white" fontWeight="bold">
-              Entry {signal.entry.toFixed(spec.decimals)}
-            </text>
-            {/* SL */}
-            <line x1="0" y1={yFor(signal.stopLoss)} x2={cw - 70} y2={yFor(signal.stopLoss)}
-              stroke="#ef4444" strokeWidth="1.5" strokeDasharray="4,3" />
-            <rect x={cw - 68} y={yFor(signal.stopLoss) - 9} width="66" height="18" fill="#ef4444" rx="2" />
-            <text x={cw - 35} y={yFor(signal.stopLoss) + 4} textAnchor="middle" fontSize="10" fill="white" fontWeight="bold">
-              SL {signal.stopLoss.toFixed(spec.decimals)}
-            </text>
-            {/* TPs */}
-            {[
-              { p: signal.tp1, label: "TP1" },
-              { p: signal.tp2, label: "TP2" },
-              { p: signal.tp3, label: "TP3" },
-            ].map((tp, i) => {
-              const y = yFor(tp.p);
-              if (y < 0 || y > ch) return null;
-              return (
-                <g key={i}>
-                  <line x1="0" y1={y} x2={cw - 70} y2={y}
-                    stroke="#10b981" strokeWidth="1" strokeDasharray="3,3" opacity="0.7" />
-                  <rect x={cw - 68} y={y - 9} width="66" height="18" fill="#10b981" rx="2" />
-                  <text x={cw - 35} y={y + 4} textAnchor="middle" fontSize="10" fill="white" fontWeight="bold">
-                    {tp.label} {tp.p.toFixed(spec.decimals)}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
+      )}
+
+      {/* TradingView Chart */}
+      <div className="bg-slate-800 rounded-lg p-2">
+        <p className="text-xs text-slate-400 px-2 py-2">{signal.pair} • Live Chart</p>
+        <div className="rounded-lg overflow-hidden">
+          <iframe
+            src={`https://s.tradingview.com/widgetembed/?frameElementId=tv_chart&symbol=${tvSymbol}&interval=${tvInterval}&hidesidetoolbar=1&symboledit=0&saveimage=0&toolbarbg=131722&studies=%5B%5D&theme=dark&style=1&timezone=Etc%2FUTC&withdateranges=1&hideideas=1&calendar=0`}
+            width="100%"
+            height="420"
+            frameBorder="0"
+            allowTransparency
+            scrolling="no"
+            style={{ display: "block" }}
+          />
         </div>
-        <div className="flex flex-wrap items-center gap-4 mt-3 text-xs text-slate-400">
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-400"></span>Entry</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400"></span>SL</span>
-          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400"></span>TPs</span>
+        <div className="px-2 pb-2 pt-3 text-xs text-slate-400">
+          💡 Reference lines below — check chart against Entry/SL/TP values
         </div>
       </div>
 
