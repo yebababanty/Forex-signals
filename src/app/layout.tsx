@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
-import "./globals.css";
 import Link from "next/link";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Forex Signal App",
-  description: "AI-powered forex signals with full trade analysis",
+  title: "ForexSignals - Pro Trading Signals",
+  description: "AI-powered forex, commodities & indices signals",
 };
 
 export default function RootLayout({
@@ -14,23 +14,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
-        <nav className="fixed top-0 left-0 right-0 bg-slate-800 border-b border-slate-700 z-50">
-          <div className="max-w-6xl mx-auto flex items-center justify-between px-4 h-14">
-            <Link href="/dashboard" className="text-lg font-bold text-emerald-400">
-              📈 ForexSignals
-            </Link>
-            <div className="flex gap-3 text-sm">
-              <Link href="/dashboard" className="text-slate-300 hover:text-white">Dashboard</Link>
-              <Link href="/signals" className="text-slate-300 hover:text-white">Signals</Link>
-              <Link href="/analysis/EURUSD" className="text-slate-300 hover:text-white">Analysis</Link>
-              <Link href="/scan" className="text-emerald-400 hover:text-emerald-300 font-semibold">🔄 Scan</Link>
-            </div>
+      <body className="bg-slate-900 text-white min-h-screen">
+        <nav className="flex items-center justify-between px-4 py-3 border-b border-slate-700 sticky top-0 bg-slate-900 z-50">
+          <Link href="/" className="text-emerald-400 font-bold text-lg">
+            📈 ForexSignals
+          </Link>
+          <div className="flex gap-4 text-sm text-slate-400">
+            <Link href="/" className="hover:text-white">Dashboard</Link>
+            <Link href="/stats" className="hover:text-white">📊 Stats</Link>
+            <Link href="/scan" className="hover:text-white">🔄 Scan</Link>
           </div>
         </nav>
-        <main className="pt-20 pb-8 max-w-6xl mx-auto px-4">
-          {children}
-        </main>
+        {children}
       </body>
     </html>
   );
