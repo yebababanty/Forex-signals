@@ -4,97 +4,168 @@ import { useState } from "react";
 import Link from "next/link";
 
 export default function ScanPage() {
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [scanResult, setScanResult] = useState<{scanned:number;created:number;skipped:number;errors:string[]} | null>(null);
+  const [checkResult, setCheckResult] = useState<{checked:number;updated:number;wins:number;losses:number;stillPending:number;details:Array<{pair:string;outcome:string;livePrice:number;entry:number}>} | null>(null);
 
-  const runScan = async () => {
-    setLoading(true);
-    setError("");
-    setResult(null);
+  async function runScan() {
+    setScanning(true);
+    setScanResult(null);
     try {
       const res = await fetch("/api/scan-manual", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Scan failed");
-        return;
-      }
-      setResult(data);
-    } catch (err: any) {
-      setError(err.message);
+      setScanResult(data);
+    } catch (e) {
+      console.error(e);
     } finally {
-      setLoading(false);
+      setScanning(false);
     }
-  };
+  }
+
+  async function runCheck() {
+    setChecking(true);
+    setCheckResult(null);
+    try {
+      const res = await fetch("/api/check-outcomes", { method: "POST" });
+      const data = await res.json();
+      setCheckResult(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  async function clearAll() {
+    if (!confirm("Delete ALL signals? This cannot be undone.")) return;
+    try {
+      const res = await fetch("/api/clear-signals", { method: "POST" });
+      const data = await res.json();
+      alert(`Deleted ${data.deleted} signals`);
+      window.location.reload();
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
   return (
-    <div className="space-y-6 max-w-3xl mx-auto">
-      <h1 className="text-3xl font-bold">🔄 Auto-Scan All Pairs</h1>
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+      <h1 className="text-2xl font-bold">🔄 Scanner</h1>
 
-      <div className="card">
-        <p className="text-slate-300 mb-4">
-          Scans all 8 major forex pairs on 1H and 4H timeframes. Only saves signals with 65%+ confidence.
-        </p>
+      {/* Generate Signals */}
+      <div className="bg-slate-800 rounded-lg p-4">
+        <h2 className="text-lg font-bold mb-2">🚀 Generate New Signals</h2>
         <p className="text-sm text-slate-400 mb-4">
-          ℹ️ This scan also runs automatically every day at 8am UTC (Mon-Fri).
+          Scans all 13 instruments (forex, gold, silver, oil, indices) on 1H and 4H timeframes using LIVE prices.
         </p>
         <button
           onClick={runScan}
-          disabled={loading}
-          className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+          disabled={scanning}
+          className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:bg-slate-600 text-white font-semibold py-3 rounded-lg transition"
         >
-          {loading ? "⏳ Scanning 16 markets... (~30-60 seconds)" : "🚀 Scan All Pairs Now"}
+          {scanning ? "⏳ Scanning..." : "🚀 Scan All Pairs Now"}
+        </button>
+
+        {scanResult && (
+          <div className="mt-4 bg-slate-900 rounded p-3 text-sm">
+            <p className="text-emerald-400 font-semibold mb-2">✅ Scan Complete</p>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div>
+                <p className="text-xs text-slate-400">Scanned</p>
+                <p className="text-lg font-bold text-blue-400">{scanResult.scanned}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Created</p>
+                <p className="text-lg font-bold text-emerald-400">{scanResult.created}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Skipped</p>
+                <p className="text-lg font-bold text-yellow-400">{scanResult.skipped}</p>
+              </div>
+            </div>
+            {scanResult.errors?.length > 0 && (
+              <div className="mt-2 text-xs text-red-400">
+                {scanResult.errors.length} errors
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Check Outcomes */}
+      <div className="bg-slate-800 rounded-lg p-4">
+        <h2 className="text-lg font-bold mb-2">🎯 Auto-Check Outcomes</h2>
+        <p className="text-sm text-slate-400 mb-4">
+          Compares current live prices vs Entry/SL/TP for all pending signals and auto-marks WIN/LOSS.
+        </p>
+        <button
+          onClick={runCheck}
+          disabled={checking}
+          className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-slate-600 text-white font-semibold py-3 rounded-lg transition"
+        >
+          {checking ? "⏳ Checking..." : "🎯 Check All Pending Trades"}
+        </button>
+
+        {checkResult && (
+          <div className="mt-4 bg-slate-900 rounded p-3 text-sm">
+            <p className="text-blue-400 font-semibold mb-2">✅ Check Complete</p>
+            <div className="grid grid-cols-4 gap-2 text-center mb-3">
+              <div>
+                <p className="text-xs text-slate-400">Checked</p>
+                <p className="text-lg font-bold text-blue-400">{checkResult.checked}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Wins</p>
+                <p className="text-lg font-bold text-emerald-400">{checkResult.wins}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Losses</p>
+                <p className="text-lg font-bold text-red-400">{checkResult.losses}</p>
+              </div>
+              <div>
+                <p className="text-xs text-slate-400">Pending</p>
+                <p className="text-lg font-bold text-yellow-400">{checkResult.stillPending}</p>
+              </div>
+            </div>
+            {checkResult.details && checkResult.details.length > 0 && (
+              <div className="border-t border-slate-700 pt-2">
+                <p className="text-xs text-slate-400 mb-2">Recent updates:</p>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {checkResult.details.map((d, i) => (
+                    <div key={i} className="flex justify-between text-xs">
+                      <span>{d.pair}</span>
+                      <span className={d.outcome === "WIN" ? "text-emerald-400" : "text-red-400"}>
+                        {d.outcome === "WIN" ? "✅ WIN" : "❌ LOSS"} @ {d.livePrice}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Auto-check info */}
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 text-sm text-blue-200">
+        💡 <strong>Tip:</strong> Auto-check runs every 6 hours via cron. You can also trigger it manually anytime.
+      </div>
+
+      {/* Danger zone */}
+      <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
+        <h3 className="text-sm font-bold text-red-400 mb-2">⚠️ Danger Zone</h3>
+        <button
+          onClick={clearAll}
+          className="w-full bg-red-500/20 hover:bg-red-500/40 text-red-400 font-semibold py-2 rounded transition text-sm"
+        >
+          🗑️ Clear All Signals (Reset DB)
         </button>
       </div>
 
-      {error && (
-        <div className="card border-red-500/20 bg-red-500/5">
-          <p className="text-red-400">❌ {error}</p>
-        </div>
-      )}
-
-      {result && (
-        <div className="space-y-4">
-          <div className="card border-emerald-500/30 bg-emerald-500/5">
-            <h2 className="text-xl font-bold mb-3">✅ Scan Complete!</h2>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>Pairs Scanned: <span className="font-bold">{result.pairsScanned}</span></div>
-              <div>New Signals: <span className="font-bold text-emerald-400">{result.signalsGenerated}</span></div>
-            </div>
-          </div>
-
-          {result.signals?.length > 0 && (
-            <div className="card">
-              <h3 className="font-semibold mb-3">🎯 Generated Signals</h3>
-              <div className="space-y-2">
-                {result.signals.map((s: any) => (
-                  <Link key={s.id} href={`/signals/${s.id}`} className="block">
-                    <div className="flex items-center justify-between p-3 bg-slate-900 rounded-lg hover:bg-slate-700 transition-colors">
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold">{s.pair}</span>
-                        <span className={`badge ${s.direction === "BUY" ? "badge-buy" : "badge-sell"}`}>
-                          {s.direction === "BUY" ? "▲" : "▼"} {s.direction}
-                        </span>
-                        <span className="text-xs text-slate-500">{s.timeframe}</span>
-                      </div>
-                      <span className="text-sm font-semibold text-emerald-400">{s.confidence}%</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {result.signals?.length === 0 && (
-            <div className="card border-yellow-500/20 bg-yellow-500/5">
-              <p className="text-yellow-400 font-semibold">⚠️ No new signals generated</p>
-              <p className="text-sm text-slate-400 mt-2">
-                All pairs scanned but no new setups meet the 65%+ confidence threshold. Existing recent signals were skipped to avoid duplicates. Try again in a few hours or during more volatile market hours.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+      <div className="text-center">
+        <Link href="/" className="text-emerald-400 underline text-sm">← Back to Dashboard</Link>
+      </div>
     </div>
   );
 }
