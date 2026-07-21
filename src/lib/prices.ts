@@ -116,14 +116,15 @@ export async function getLivePrice(symbol: string): Promise<number> {
   }
 
   // Sanity checks — reject bogus prices
-  if (price) {
-    if (symbol === "XAU/USD" && price < 1000) price = null; // Gold can't be below $1000
-    if (symbol === "XAG/USD" && price < 5) price = null;
-    if (symbol === "US30" && price < 10000) price = null;
-    if (symbol === "NAS100" && price < 5000) price = null;
+  if (price !== null) {
+    const p: number = price;
+    if (symbol === "XAU/USD" && p < 1000) price = null;
+    else if (symbol === "XAG/USD" && p < 5) price = null;
+    else if (symbol === "US30" && p < 10000) price = null;
+    else if (symbol === "NAS100" && p < 5000) price = null;
   }
 
-  if (!price || isNaN(price)) {
+  if (price === null || isNaN(price)) {
     console.warn(`⚠️ Using fallback for ${symbol}`);
     price = FALLBACK[symbol] || 1;
   }

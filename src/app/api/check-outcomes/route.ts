@@ -22,7 +22,7 @@ async function runCheck() {
     // Get all pending signals
     const pending = await prisma.signal.findMany({
       where: {
-        OR: [{ outcome: "PENDING" }, { outcome: null }],
+        outcome: "PENDING",
         status: "active",
       },
     });
